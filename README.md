@@ -2,13 +2,18 @@
 
 Microservicio Spring Boot que valida las credenciales, emite JWT firmados con HS256 y administra las cuentas. Usa una base MySQL propia. `ms-negocio` valida el JWT con el mismo emisor y la misma clave Base64.
 
+## Estructura
+
+El proyecto Spring Boot está en [ms-auth/](ms-auth/), con su propio POM, Maven Wrapper, código y pruebas. [Carpeta ms-negocio en el repositorio de negocio](https://github.com/Croix77/GasVolcanBackend/tree/feat/completar-gas-volcan/ms-negocio)
+
 ## Preparación local
 
 1. Usa Java 17 y crea la base `gas_volcan_auth` en MySQL.
 2. Crea una cuenta de base de datos que tenga permisos solo sobre ese esquema. Usa una contraseña distinta de las contraseñas de la aplicación.
-3. Configura `JWT_SECRET` y `AUTH_DB_PASSWORD` antes de arrancar:
+3. Entra a la carpeta del servicio desde la raíz del repositorio y configura `JWT_SECRET` y `AUTH_DB_PASSWORD` antes de arrancar:
 
 ```powershell
+Set-Location ms-auth
 $bytes = New-Object byte[] 32
 [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
 $env:JWT_SECRET = [Convert]::ToBase64String($bytes)
@@ -21,7 +26,7 @@ Genera la clave JWT una vez por entorno y usa el mismo valor en ambos servicios.
 
 ## Primer usuario
 
-Con una base vacía, habilita el perfil `local` e indica los datos del primer administrador antes de iniciar:
+Desde la carpeta del servicio, con una base vacía, habilita el perfil `local` e indica los datos del primer administrador antes de iniciar:
 
 ```powershell
 $env:SPRING_PROFILES_ACTIVE = "local"
@@ -75,8 +80,10 @@ Cambiar el rol o la contraseña, desactivar o reactivar una cuenta invalida los 
 
 ## Pruebas
 
+Ejecuta Maven desde la carpeta `ms-auth/`.
+
 ```powershell
 .\mvnw.cmd -B -ntp verify
 ```
 
-La suite incluye las pruebas unitarias de login y firma y pruebas HTTP con una base H2 de prueba. Se validan los permisos, cambios de estado, edición de usuarios, renovación, tokens vencidos y ruta OpenAPI. El JAR se genera en `target/ms-auth-0.0.1-SNAPSHOT.jar`.
+La suite incluye las pruebas unitarias de login y firma y pruebas HTTP con una base H2 de prueba. Se validan los permisos, cambios de estado, edición de usuarios, renovación, tokens vencidos y ruta OpenAPI. El JAR se genera en `ms-auth/target/ms-auth-0.0.1-SNAPSHOT.jar`.
