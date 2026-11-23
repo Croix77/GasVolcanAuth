@@ -1,43 +1,36 @@
 package cl.duoc.gasvolcan.auth.config;
 
-import cl.duoc.gasvolcan.auth.model.Usuario;
+import cl.duoc.gasvolcan.auth.dto.CrearUsuarioSolicitud;
+import cl.duoc.gasvolcan.auth.model.Rol;
 import cl.duoc.gasvolcan.auth.repository.UsuarioRepository;
+import cl.duoc.gasvolcan.auth.service.UsuarioService;
+import jakarta.validation.Validator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.annotation.Profile;
 
 @Configuration
+@Profile("local & !prod")
+@ConditionalOnProperty(name = "app.bootstrap.admin.enabled", havingValue = "true")
 public class DatosIniciales {
 
-	@Value("${app.seed.admin-password:Admin123!}")
-	private String adminPassword;
-
-	@Value("${app.seed.vendedor-password:Vendedor123!}")
-	private String vendedorPassword;
-
-	@Value("${app.seed.cliente-password:Cliente123!}")
-	private String clientePassword;
-
 	@Bean
-	CommandLineRunner usuarioInicial(UsuarioRepository repo, PasswordEncoder encoder) {
+	CommandLineRunner usuarioInicial(UsuarioRepository repo, UsuarioService usuarios, Validator validator,
+			@Value("${app.bootstrap.admin.nombre}") String nombre,
+			@Value("${app.bootstrap.admin.correo}") String correo,
+			@Value("${app.bootstrap.admin.password}") String password) {
 		return args -> {
-			crearSiNoExiste(repo, encoder, "admin@gaselvolcan.cl", adminPassword, "ADMIN");
-			crearSiNoExiste(repo, encoder, "vendedor@gaselvolcan.cl", vendedorPassword, "VENDEDOR");
-			crearSiNoExiste(repo, encoder, "cliente@gaselvolcan.cl", clientePassword, "CLIENTE");
+			if (repo.count() != 0) {
+				return;
+			}
+			CrearUsuarioSolicitud admin = new CrearUsuarioSolicitud(nombre, correo, Rol.ADMIN, password);
+			if (!validator.validate(admin).isEmpty()) {
+				throw new IllegalStateException("Completa nombre, correo y contraseña del administrador inicial.");
+			}
+			usuarios.crear(admin);
 		};
-	}
-
-	private void crearSiNoExiste(UsuarioRepository repo, PasswordEncoder encoder,
-			String correo, String password, String rol) {
-		if (repo.findByCorreoIgnoreCase(correo).isEmpty()) {
-			Usuario usuario = new Usuario();
-			usuario.setCorreo(correo);
-			usuario.setPassword(encoder.encode(password));
-			usuario.setRol(rol);
-			usuario.setHabilitado(true);
-			repo.save(usuario);
-		}
 	}
 }

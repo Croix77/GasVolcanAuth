@@ -1,82 +1,82 @@
-# Gas El Volcán · Servicio de autenticación
+# Gas El Volcán · ms-auth
 
-Servicio Spring Boot que valida credenciales con BCrypt y emite JWT firmados para el resto de los servicios de Gas El Volcán. Se ejecuta por separado del backend de negocio y mantiene su propia base de datos.
+Microservicio Spring Boot que valida las credenciales, emite JWT firmados con HS256 y administra las cuentas. Usa una base MySQL propia. `ms-negocio` valida el JWT con el mismo emisor y la misma clave Base64.
 
-## Requisitos
+## Preparación local
 
-- Java 17.
-- MySQL activo en `127.0.0.1:3306`.
-- Una base `gas_volcan_auth` y una cuenta con permisos sobre esa base.
-
-```sql
-CREATE DATABASE gas_volcan_auth CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'gas_volcan_auth_app'@'localhost' IDENTIFIED BY 'CAMBIAR_CLAVE';
-GRANT ALL PRIVILEGES ON gas_volcan_auth.* TO 'gas_volcan_auth_app'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-## Variables de entorno
-
-| Variable | Obligatoria | Uso |
-|---|---|---|
-| `JWT_SECRET` | Sí | Clave Base64 compartida con el backend de negocio. Nunca se versiona. |
-| `AUTH_DB_PASSWORD` | Sí | Contraseña de `gas_volcan_auth_app`. |
-
-El puerto (`8081`), la URL de la base, el usuario, el emisor (`gasvolcan-auth`) y la expiración (1 hora) están fijos en `application.properties`, igual que en la guía.
-
-Genera la clave una vez y usa el mismo valor en Auth y en Negocio:
+1. Usa Java 17 y crea la base `gas_volcan_auth` en MySQL.
+2. Crea una cuenta de base de datos que tenga permisos solo sobre ese esquema. Usa una contraseña distinta de las contraseñas de la aplicación.
+3. Configura `JWT_SECRET` y `AUTH_DB_PASSWORD` antes de arrancar:
 
 ```powershell
 $bytes = New-Object byte[] 32
 [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
 $env:JWT_SECRET = [Convert]::ToBase64String($bytes)
-```
-
-## Arrancar en Windows
-
-```powershell
-$env:JWT_SECRET = "LA_CLAVE_BASE64"
-$env:AUTH_DB_PASSWORD = "CAMBIAR_CLAVE"
+$claveDb = Read-Host "Contraseña MySQL de Auth" -AsSecureString
+$env:AUTH_DB_PASSWORD = [System.Net.NetworkCredential]::new("", $claveDb).Password
 .\mvnw.cmd spring-boot:run
 ```
 
-El servicio queda en `http://localhost:8081`. Swagger: `http://localhost:8081/swagger-ui/index.html`.
+Genera la clave JWT una vez por entorno y usa el mismo valor en ambos servicios. Auth escucha en `http://localhost:8081`; en local, Swagger abre en `http://localhost:8081/swagger-ui/index.html`.
 
-## Endpoint
+## Primer usuario
 
-| Método | Ruta | Autenticación | Respuesta |
-|---|---|---|---|
-| POST | `/api/auth/login` | Pública | `200` con `{ token, correo, rol }` o `401` |
+Con una base vacía, habilita el perfil `local` e indica los datos del primer administrador antes de iniciar:
 
-Ejemplo:
-
-```json
-{
-  "correo": "admin@gaselvolcan.cl",
-  "password": "Admin123!"
-}
+```powershell
+$env:SPRING_PROFILES_ACTIVE = "local"
+$env:AUTH_BOOTSTRAP_ADMIN = "true"
+$env:AUTH_ADMIN_NAME = Read-Host "Nombre del administrador"
+$env:AUTH_ADMIN_EMAIL = Read-Host "Correo del administrador"
+$claveAdmin = Read-Host "Contraseña del administrador" -AsSecureString
+$env:AUTH_ADMIN_PASSWORD = [System.Net.NetworkCredential]::new("", $claveAdmin).Password
+.\mvnw.cmd spring-boot:run
 ```
 
-## Cuentas demo
+La aplicación almacena la contraseña con BCrypt. Después del primer arranque, desactiva `AUTH_BOOTSTRAP_ADMIN` y elimina `AUTH_ADMIN_PASSWORD` del entorno de la terminal. Las cuentas de cliente, vendedor, operadora y repartidor se crean desde el panel de administración o por Swagger con el token de administrador.
 
-Se crean al arrancar si no existen. Son cuentas temporales de desarrollo: cámbialas o elimínalas antes de desplegar.
+Si usas una base de una versión anterior, el perfil local con `AUTH_DB_DDL_AUTO=update` agrega las columnas del nombre y de la versión de sesión. Cambia todas las contraseñas de las cuentas de ejemplo anteriores o prepara una base nueva. Para despliegue, prepara el esquema y el administrador inicial antes de arrancar con el perfil `prod` y su configuración de validación.
 
-| Rol | Correo | Contraseña por defecto |
+## Variables de entorno
+
+| Variable | Valor predeterminado |
+|---|---|
+| `AUTH_PORT` | `8081` |
+| `AUTH_DB_URL` | `jdbc:mysql://127.0.0.1:3306/gas_volcan_auth` |
+| `AUTH_DB_USER` | `gas_volcan_auth_app` |
+| `AUTH_DB_PASSWORD` | Requerida |
+| `AUTH_DB_DDL_AUTO` | `update` local, `validate` en el perfil `prod` |
+| `JWT_SECRET` | Requerida. Base64 de al menos 32 bytes |
+| `JWT_ISSUER` | `gasvolcan-auth` |
+| `AUTH_JWT_EXPIRATION_MS` | `3600000` (1 hora) |
+| `AUTH_JWT_REFRESH_WINDOW_MS` | `300000` (5 minutos) |
+| `APP_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` en local, vacío con `prod` |
+| `SWAGGER_ENABLED` | `true` local, `false` con `prod` |
+
+## API
+
+| Método | Ruta | Permiso y datos |
 |---|---|---|
-| ADMIN | `admin@gaselvolcan.cl` | `Admin123!` |
-| VENDEDOR | `vendedor@gaselvolcan.cl` | `Vendedor123!` |
-| CLIENTE | `cliente@gaselvolcan.cl` | `Cliente123!` |
+| POST | `/api/auth/login` | Pública. Recibe `{correo,password}` |
+| GET | `/api/auth/me` | Sesión válida. Devuelve el perfil actual |
+| POST | `/api/auth/refresh` | Sesión válida. Usa el Bearer actual y emite un JWT nuevo durante la ventana de renovación |
+| GET | `/api/auth/usuarios` | ADMIN. Lista de usuarios |
+| POST | `/api/auth/usuarios` | ADMIN. Recibe `{nombre,correo,rol,password}` |
+| GET | `/api/auth/usuarios/{id}` | ADMIN. Detalle |
+| PUT | `/api/auth/usuarios/{id}` | ADMIN. Recibe `{nombre,rol,password?}` |
+| PATCH | `/api/auth/usuarios/{id}/estado` | ADMIN. Recibe `{activo}` |
+| GET | `/api/auth/repartidores` | ADMIN u OPERADORA. Lista de repartidores activos |
 
-Las contraseñas se guardan como hash BCrypt. Las claves se pueden cambiar con las propiedades `app.seed.admin-password`, `app.seed.vendedor-password` y `app.seed.cliente-password`.
+El login y la renovación devuelven `{token,correo,rol,nombre}`. El perfil y las operaciones de usuarios devuelven `{id,nombre,correo,rol,activo}`. El correo es la identidad que usa Negocio para asociar los pedidos y queda fijo al crear la cuenta. Los roles disponibles son `ADMIN`, `VENDEDOR`, `CLIENTE`, `OPERADORA` y `REPARTIDOR`.
+
+La API devuelve `401` para login o sesión inválidos, `403` para permisos insuficientes, `400` para datos inválidos, `404` para un usuario inexistente y `409` para conflictos como un correo duplicado. Las respuestas de error contienen `mensaje` y los errores de validación de campos también pueden incluir `campos`.
+
+Cambiar el rol o la contraseña, desactivar o reactivar una cuenta invalida los JWT anteriores en Auth. La renovación revisa el estado de la cuenta y requiere un JWT aún vigente. Fuera de los últimos cinco minutos devuelve el JWT actual.
 
 ## Pruebas
 
 ```powershell
-.\mvnw.cmd test
+.\mvnw.cmd -B -ntp verify
 ```
 
-Las pruebas unitarias cubren la emisión del token y el login válido, la contraseña incorrecta, la cuenta deshabilitada y el correo inexistente.
-
-## Integración
-
-El backend de negocio valida el mismo token con el mismo `JWT_SECRET` y el emisor `gasvolcan-auth`. Auth no comparte clases ni base de datos con Negocio: la única relación es el JWT.
+La suite incluye las pruebas unitarias de login y firma y pruebas HTTP con una base H2 de prueba. Se validan los permisos, cambios de estado, edición de usuarios, renovación, tokens vencidos y ruta OpenAPI. El JAR se genera en `target/ms-auth-0.0.1-SNAPSHOT.jar`.
