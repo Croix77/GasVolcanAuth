@@ -1,10 +1,10 @@
 # Gas El Volcán · ms-auth
 
-Microservicio Spring Boot que valida las credenciales, emite JWT firmados con HS256 y administra las cuentas. Usa una base MySQL propia. `ms-negocio` valida el JWT con el mismo emisor y la misma clave Base64.
+Microservicio Spring Boot que valida las credenciales, emite JWT firmados con HS256 y administra las cuentas. Usa una base MySQL propia. Los otros cuatro microservicios validan el JWT con el mismo emisor y la misma clave Base64.
 
 ## Estructura
 
-El proyecto Spring Boot está en [ms-auth/](ms-auth/), con su propio POM, Maven Wrapper, código y pruebas. [Carpeta ms-negocio en el repositorio de negocio](https://github.com/Croix77/GasVolcanBackend/tree/feat/completar-gas-volcan/ms-negocio)
+El proyecto Spring Boot está en [ms-auth/](ms-auth/), con su propio POM, Maven Wrapper, código y pruebas. [Servicios de categorías, productos, pedidos y despacho](https://github.com/Croix77/GasVolcanBackend)
 
 ## Preparación local
 
